@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>编辑题目 {{ level }}-{{ qid }}</title>
+</head>
+<body>
+    <h2>✏️ 编辑题目 {{ level }}-{{ qid }}</h2>
+    <form method="POST" action="/admin/edit_question/{{ level }}/{{ qid }}" enctype="multipart/form-data">
+        <label>提示语：</label>
+        <input name="prompt" value="{{ question.prompt }}" style="width:400px;"><br>
+
+        <label>词序列（逗号隔开）：</label>
+        <input name="words" value="{{ words }}"><br>
+
+        <label>方向序列（逗号隔开，可留空）：</label>
+        <input name="motions" value="{{ motions }}"><br>
+
+        {% if question.media %}
+            <p>当前媒体文件：{{ question.media }}</p>
+            {% if question.media.endswith(".mp4") %}
+                <video src="{{ url_for('static', filename='media/' + question.media) }}" width="240" controls></video>
+            {% else %}
+                <img src="{{ url_for('static', filename='media/' + question.media) }}" width="240">
+            {% endif %}
+        {% endif %}
+
+        <label>替换演示文件（留空表示不更换）：</label>
+        <input type="file" name="media"><br>
+
+        <button type="submit">💾 保存修改</button>
+    </form>
+
+    <p><a href="/admin/questions">返回题库管理</a></p>
+</body>
+</html>

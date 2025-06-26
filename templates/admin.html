@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>管理员后台</title>
+</head>
+<body>
+    <h2>📘 用户管理</h2>
+    <form method="POST" action="/admin/add_user">
+        <label>用户名：</label>
+        <input name="username" required>
+        <label>初始关卡：</label>
+        <input name="level" type="number" value="1" min="1">
+        <label>初始题号：</label>
+        <input name="question" type="number" value="1" min="1">
+        <button type="submit">➕ 添加用户</button>
+    </form>
+
+    <ul>
+        {% for username, progress in users.items() %}
+            <li>
+                用户：<b>{{ username }}</b>，
+                当前进度：{{ progress.unlocked_level }}-{{ progress.unlocked_question }}
+                <a href="/admin/delete_user/{{ username }}" onclick="return confirm('确认删除 {{ username }}？');">🗑️ 删除</a>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <hr>
+    <h2>📚 题库列表</h2>
+    {% for level, qs in questions.items() %}
+        <h4>第 {{ level }} 关</h4>
+        <ul>
+            {% for qid, q in qs.items() %}
+                <li>{{ level }}-{{ qid }}：{{ q.prompt }}</li>
+            {% endfor %}
+        </ul>
+    {% endfor %}
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="UTF-8"><title>中文手语学习平台</title></head>
+<body>
+    <h2>请选择题目</h2>
+    <ul>
+        {% for level, qs in questions.items() %}
+            <li>关卡 {{ level }}
+                <ul>
+                    {% for q in qs %}
+                        <li><a href="{{ url_for('task', level=level, q=q) }}">第{{ q }}题</a></li>
+                    {% endfor %}
+                </ul>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

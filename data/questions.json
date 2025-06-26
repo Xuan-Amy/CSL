@@ -1,0 +1,77 @@
+{
+  "1": {
+    "1": {
+      "prompt": "请做出手语：车，并向右移动",
+      "target_sequence": [
+        {
+          "word": "车",
+          "motion": "right"
+        }
+      ],
+      "media": "1-1.mp4"
+    },
+    "2": {
+      "prompt": "请做出手语：房子，并向上移动",
+      "target_sequence": [
+        {
+          "word": "房子",
+          "motion": "up"
+        }
+      ]
+    },
+    "3": {
+      "prompt": "这是一个测试题",
+      "target_sequence": [
+        {
+          "word": "房子",
+          "motion": "up"
+        },
+        {
+          "word": "车",
+          "motion": "right"
+        }
+      ]
+    },
+    "4": {
+      "prompt": "test",
+      "target_sequence": [
+        {
+          "word": "A",
+          "motion": "right"
+        },
+        {
+          "word": "B",
+          "motion": "up"
+        }
+      ]
+    }
+  },
+  "2": {
+    "1": {
+      "prompt": "test123",
+      "target_sequence": [
+        {
+          "word": "A",
+          "motion": "left"
+        },
+        {
+          "word": "B",
+          "motion": "right"
+        }
+      ]
+    },
+    "2": {
+      "prompt": "test",
+      "target_sequence": [
+        {
+          "word": "车",
+          "motion": "left"
+        },
+        {
+          "word": "房子",
+          "motion": "down"
+        }
+      ]
+    }
+  }
+}

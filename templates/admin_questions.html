@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>题库管理</title>
+</head>
+<body>
+    <h2>📘 题库管理系统</h2>
+
+    <h3>➕ 新增题目</h3>
+    <form method="POST" action="/admin/add_question" enctype="multipart/form-data">
+        <label>关卡：</label>
+        <input name="level" type="number" required><br>
+        <label>题号：</label>
+        <input name="qid" type="number" required><br>
+        <label>提示语：</label>
+        <input name="prompt" style="width:400px;" required><br>
+        <label>词序列（用逗号隔开）：</label>
+        <input name="words" placeholder="例如：车,房子"><br>
+        <label>方向序列（与上面词对应，允许为空，用逗号隔开）：</label>
+        <input name="motions" placeholder="例如：right,up"><br>
+        <label>上传演示文件（图片或视频）：</label>
+        <input type="file" name="media"><br>
+        <button type="submit">添加</button>
+    </form>
+
+    <hr>
+    <h3>📚 当前题库</h3>
+    {% for level, qs in questions.items() %}
+        <h4>关卡 {{ level }}</h4>
+        <ul>
+        {% for qid, q in qs.items() %}
+            <li>
+                <b>{{ level }}-{{ qid }}</b>：{{ q.prompt }}<br>
+                ➤ 目标序列：
+                {% for item in q.target_sequence %}
+                    {{ item.word }}{% if item.motion %}({{ item.motion }}){% endif %}
+                    {% if not loop.last %} → {% endif %}
+                {% endfor %}
+
+                {% if q.media %}
+                    <br>🎬 演示文件：
+                    {% if q.media.endswith(".mp4") %}
+                        <video src="{{ url_for('static', filename='media/' + q.media) }}" width="240" controls></video>
+                    {% elif q.media.endswith(".jpg") or q.media.endswith(".png") %}
+                        <img src="{{ url_for('static', filename='media/' + q.media) }}" width="240">
+                    {% endif %}
+                {% endif %}
+                <br>
+                [<a href="/admin/delete_question/{{ level }}/{{ qid }}" onclick="return confirm('确认删除题目 {{ level }}-{{ qid }}？');">删除</a>]
+                [<a href="/admin/edit_question/{{ level }}/{{ qid }}">编辑</a>]
+
+            </li>
+        {% endfor %}
+        </ul>
+    {% endfor %}
+
+    <p><a href="/admin">返回管理员首页</a></p>
+</body>
+</html>

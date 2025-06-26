@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>任务 {{ level }}-{{ q }}</title>
+    <style>
+        .step { font-size: 20px; margin-right: 10px; }
+        .done { color: green; font-weight: bold; }
+        .arrow {
+            font-size: 14px;
+            vertical-align: super;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h2>任务 {{ level }}-{{ q }}</h2>
+    <p>{{ prompt }}</p>
+
+    <!-- 视频显示 -->
+    <img src="{{ url_for('video_feed', level=level, q=q) }}" width="640" height="480">
+
+    <!-- 动态状态展示 -->
+    <div style="margin-top: 20px;">
+        <h3>目标动作：</h3>
+        <div id="target-sequence"></div>
+
+        <h3>识别状态：</h3>
+        <p>当前识别词语：<span id="current-word">-</span></p>
+        <p id="completed" style="color: green; font-weight: bold;"></p>
+    </div>
+
+    <script>
+    const targetSequence = {{ questions[level][q]["target_sequence"] | tojson }};
+    const level = "{{ level }}";
+    const q = "{{ q }}";
+
+    // 显示目标序列（初始）
+    const targetDiv = document.getElementById("target-sequence");
+    function renderStatus(detectedList) {
+        targetDiv.innerHTML = "";
+
+        for (let i = 0; i < targetSequence.length; i++) {
+            const item = targetSequence[i];
+            const word = item.word;
+            const motion = item.motion;
+            const isDetected = i < detectedList.length;
+
+            const span = document.createElement("span");
+            span.classList.add("step");
+            if (isDetected) span.classList.add("done");
+
+            // 方向展示为上标
+            const arrowMap = {
+                "right": "→", "left": "←",
+                "up": "↑", "down": "↓"
+            };
+            const arrow = motion && arrowMap[motion] ? arrowMap[motion] : "";
+
+            span.innerHTML = `${word}${arrow ? '<sub class="arrow">' + arrow + '</sub>' : ''}`;
+            targetDiv.appendChild(span);
+        }
+    }
+
+    function updateStatus() {
+        fetch(`/status_feed/${level}/${q}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("current-word").innerText = data.current || "-";
+                renderStatus(data.detected);
+                if (data.completed) {
+                    document.getElementById("completed").innerText = "✅ 通关成功！";
+                }
+            });
+    }
+
+    // 每 800ms 轮询状态
+    setInterval(updateStatus, 800);
+    updateStatus();
+    </script>
+</body>
+</html>
