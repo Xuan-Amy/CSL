@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>识别 Debug 页面</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            padding: 30px;
+            background: #f0f2f5;
+        }
+        h2 {
+            color: #222;
+            margin-bottom: 20px;
+        }
+        .video-frame {
+            display: block;
+            margin: 0 auto;
+            border-radius: 8px;
+            border: 4px solid #007bff;
+            max-width: 100%;
+        }
+        .status-box {
+            max-width: 700px;
+            margin: 30px auto 0;
+            background: #fff;
+            padding: 20px 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+        }
+        .status-line {
+            margin: 15px 0;
+            font-size: 18px;
+        }
+        .label {
+            font-weight: bold;
+            color: #333;
+        }
+        .left {
+            color: #007bff;
+            font-weight: 600;
+        }
+        .right {
+            color: #28a745;
+            font-weight: 600;
+        }
+        .motion {
+            font-size: 16px;
+            color: #888;
+            margin-left: 10px;
+            font-style: italic;
+        }
+        .detected {
+            color: #ff8800;
+            font-weight: 600;
+        }
+        .success {
+            margin-top: 20px;
+            color: #2ecc71;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<center>
+<h2>手势识别 Debug 页面</h2>
+</center>
+
+<!-- 视频显示 -->
+<img src="/video_feed/debug/debug" width="640" height="480" class="video-frame">
+
+<div class="status-box">
+    <div class="status-line">
+        <span class="label">左手识别：</span>
+        <span id="current-left" class="left">-</span>
+        <span id="motion-left" class="motion">-</span>
+    </div>
+    <div class="status-line">
+        <span class="label">右手识别：</span>
+        <span id="current-right" class="right">-</span>
+        <span id="motion-right" class="motion">-</span>
+    </div>
+    <div class="status-line">
+        <span class="label">识别历史：</span>
+        <span id="detected-list" class="detected">-</span>
+    </div>
+    <div id="completed" class="success"></div>
+</div>
+
+<script>
+function updateStatus() {
+    fetch("/status_feed/debug/debug")
+        .then(res => res.json())
+        .then(data => {
+            const current = data.current || {};
+            const motion = data.motion || {};
+            document.getElementById("current-left").innerText = current.left || "-";
+            document.getElementById("current-right").innerText = current.right || "-";
+            document.getElementById("motion-left").innerText = motion.left || "-";
+            document.getElementById("motion-right").innerText = motion.right || "-";
+
+            const detected = (data.detected || []).join("，");
+            document.getElementById("detected-list").innerText = detected || "-";
+
+            if (data.completed) {
+                document.getElementById("completed").innerText = "✅ 通关成功";
+            } else {
+                document.getElementById("completed").innerText = "";
+            }
+        });
+}
+
+setInterval(updateStatus, 800);
+updateStatus();
+</script>
+
+</body>
+</html>

@@ -178,6 +178,34 @@ def update_question(level, qid):
     save_questions(QUESTIONS)
     return redirect("/admin/questions")
 
+# === 综合测试网页 ===
+@app.route("/debug")
+def debug():
+    return render_template("debug.html")
+
+@app.route("/video_feed/debug/debug")
+def debug_video_feed():
+    key = "debug-debug"
+    if key not in camera_instances:
+        camera_instances[key] = SignCamera(target_sequence=[])  # 空任务序列
+    return Response(camera_instances[key].generate(),
+                    mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.route("/status_feed/debug/debug")
+def debug_status_feed():
+    key = "debug-debug"
+    if key in camera_instances:
+        status = camera_instances[key].get_status()
+        # 🟦 获取左右手方向（你应在 motiondetection.py 中加入 get_last_motion("left") 方法）
+        status["motion"] = {
+            "left": camera_instances[key].motion.get_last_motion("left"),
+            "right": camera_instances[key].motion.get_last_motion("right")
+        }
+        return jsonify(status)
+    return jsonify({"current": {}, "detected": [], "completed": False, "motion": {"left": "-", "right": "-"}})
+
+
 # === 启动服务器 ===
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

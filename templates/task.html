@@ -26,7 +26,8 @@
         <div id="target-sequence"></div>
 
         <h3>识别状态：</h3>
-        <p>当前识别词语：<span id="current-word">-</span></p>
+        <p>左手识别词语：<span id="current-left">-</span></p>
+        <p>右手识别词语：<span id="current-right">-</span></p>
         <p id="completed" style="color: green; font-weight: bold;"></p>
     </div>
 
@@ -35,8 +36,10 @@
     const level = "{{ level }}";
     const q = "{{ q }}";
 
-    // 显示目标序列（初始）
     const targetDiv = document.getElementById("target-sequence");
+    const currentLeft = document.getElementById("current-left");
+    const currentRight = document.getElementById("current-right");
+
     function renderStatus(detectedList) {
         targetDiv.innerHTML = "";
 
@@ -50,10 +53,10 @@
             span.classList.add("step");
             if (isDetected) span.classList.add("done");
 
-            // 方向展示为上标
             const arrowMap = {
                 "right": "→", "left": "←",
-                "up": "↑", "down": "↓"
+                "up": "↑", "down": "↓",
+                "closer": "⤒", "farther": "⤓"
             };
             const arrow = motion && arrowMap[motion] ? arrowMap[motion] : "";
 
@@ -66,15 +69,16 @@
         fetch(`/status_feed/${level}/${q}`)
             .then(res => res.json())
             .then(data => {
-                document.getElementById("current-word").innerText = data.current || "-";
-                renderStatus(data.detected);
+                const current = data.current || {};
+                currentLeft.innerText = current.left || "-";
+                currentRight.innerText = current.right || "-";
+                renderStatus(data.detected || []);
                 if (data.completed) {
                     document.getElementById("completed").innerText = "✅ 通关成功！";
                 }
             });
     }
 
-    // 每 800ms 轮询状态
     setInterval(updateStatus, 800);
     updateStatus();
     </script>
