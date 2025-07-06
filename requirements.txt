@@ -1,0 +1,5 @@
+mediapipe
+flask
+numpy
+joblib
+pillow

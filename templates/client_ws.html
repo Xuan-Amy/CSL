@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>浏览器实时识别</title>
+  <style>
+    body {
+      background: #f0f2f5;
+      font-family: sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    video {
+      border: 3px solid #007bff;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 18px;
+      color: #222;
+    }
+  </style>
+</head>
+<body>
+  <h2>📷 本地摄像头识别（WebSocket 实时）</h2>
+  <video id="video" width="640" height="480" autoplay playsinline muted></video>
+  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+  <div id="result">等待摄像头授权...</div>
+
+  <script>
+window.addEventListener("DOMContentLoaded", () => {
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const resultDiv = document.getElementById("result");
+
+  console.log("📢 页面已加载，尝试连接摄像头...");
+
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then(stream => {
+      console.log("✅ 摄像头权限已获得");
+      resultDiv.innerText = "✅ 摄像头已启用，开始识别...";
+      video.srcObject = stream;
+
+      // WebSocket 初始化（等摄像头 OK 后再启动）
+      const ws = new WebSocket("ws://" + location.host + "/ws/recognize");
+
+      ws.onopen = () => console.log("✅ WebSocket 连接成功");
+      ws.onerror = err => console.error("❌ WebSocket 错误", err);
+      ws.onclose = () => console.warn("⚠️ WebSocket 连接关闭");
+
+      ws.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        resultDiv.innerText = `左手: ${data.left} ｜ 右手: ${data.right}`;
+      };
+
+      // 每 200ms 推送一帧
+      setInterval(() => {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imgData = canvas.toDataURL("image/jpeg");
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(imgData);
+        }
+      }, 200);
+    })
+    .catch(err => {
+      alert("❌ 无法访问摄像头，请在浏览器地址栏点击小摄像头图标手动开启权限");
+      resultDiv.innerText = "❌ 摄像头权限被拒绝";
+      console.error("🚨 getUserMedia 出错:", err);
+    });
+});
+</script>
+
+</body>
+</html>

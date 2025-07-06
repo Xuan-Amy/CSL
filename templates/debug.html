@@ -69,9 +69,10 @@
 <h2>手势识别 Debug 页面</h2>
 </center>
 
-<!-- 视频显示 -->
-<img src="/video_feed/debug/debug" width="640" height="480" class="video-frame">
+<!-- 显示 MJPEG 视频流 -->
+<img src="/video_feed/debug/debug" id="camera" class="video-frame" width="640" height="480" />
 
+<!-- 状态显示 -->
 <div class="status-box">
     <div class="status-line">
         <span class="label">左手识别：</span>
@@ -90,31 +91,22 @@
     <div id="completed" class="success"></div>
 </div>
 
+<!-- 状态更新脚本 -->
 <script>
 function updateStatus() {
     fetch("/status_feed/debug/debug")
         .then(res => res.json())
         .then(data => {
-            const current = data.current || {};
-            const motion = data.motion || {};
-            document.getElementById("current-left").innerText = current.left || "-";
-            document.getElementById("current-right").innerText = current.right || "-";
-            document.getElementById("motion-left").innerText = motion.left || "-";
-            document.getElementById("motion-right").innerText = motion.right || "-";
-
-            const detected = (data.detected || []).join("，");
-            document.getElementById("detected-list").innerText = detected || "-";
-
-            if (data.completed) {
-                document.getElementById("completed").innerText = "✅ 通关成功";
-            } else {
-                document.getElementById("completed").innerText = "";
-            }
-        });
+            document.getElementById("current-left").textContent = data.current.left || "-";
+            document.getElementById("current-right").textContent = data.current.right || "-";
+            document.getElementById("motion-left").textContent = data.motion.left || "-";
+            document.getElementById("motion-right").textContent = data.motion.right || "-";
+            document.getElementById("detected-list").textContent = data.detected.join(", ") || "-";
+            document.getElementById("completed").textContent = data.completed ? "✅ 识别完成！" : "";
+        })
+        .catch(err => console.error("获取状态失败", err));
 }
-
-setInterval(updateStatus, 800);
-updateStatus();
+setInterval(updateStatus, 500);  // 每 0.5 秒刷新
 </script>
 
 </body>

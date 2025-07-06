@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket 实时识别</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 20px;
+      background: #f0f2f5;
+    }
+    video, canvas {
+      border: 3px solid #007bff;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<h2>📷 WebSocket 实时识别页面</h2>
+
+<!-- 摄像头画面 -->
+<video id="video" width="640" height="480" autoplay playsinline></video>
+<canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+
+<!-- 实时识别结果 -->
+<div id="result">识别结果：<span id="left">-</span> / <span id="right">-</span></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("🚀 DOM 完成，准备调用 getUserMedia");
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("❌ 当前浏览器不支持 getUserMedia");
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then(stream => {
+      console.log("✅ 成功获取摄像头流");
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      video.srcObject = stream;
+      video.play();
+
+      // ✅ 自动切换 ws:// 或 wss://
+      const ws_protocol = location.protocol === "https:" ? "wss://" : "ws://";
+      const ws = new WebSocket(ws_protocol + location.host + "/ws/recognize");
+
+      let readyToSend = true;
+
+      ws.onopen = () => console.log("🔗 WebSocket 已连接");
+
+      ws.onmessage = event => {
+        const data = JSON.parse(event.data);
+        document.getElementById("left").textContent = data.left || "-";
+        document.getElementById("right").textContent = data.right || "-";
+        readyToSend = true; // ✅ 只有收到返回才允许发送下一帧
+      };
+
+      function sendFrame() {
+        if (
+          video.readyState >= 2 &&
+          ws.readyState === WebSocket.OPEN &&
+          readyToSend
+        ) {
+          readyToSend = false;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(blob => {
+            if (blob) {
+              ws.send(blob);
+            } else {
+              readyToSend = true; // 如果出错，释放锁
+            }
+          }, "image/jpeg");
+        }
+        requestAnimationFrame(sendFrame); // 用更灵活的刷新机制代替 setInterval
+      }
+
+      sendFrame(); // ⬅️ 开始发送循环
+    })
+    .catch(err => {
+      alert(`❌ 无法访问摄像头：${err.name} - ${err.message}`);
+      console.error("🚫 getUserMedia 错误详情：", err);
+    });
+});
+</script>
+
+
+
+
+</body>
+</html>
