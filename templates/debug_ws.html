@@ -2,101 +2,158 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>WebSocket 实时识别</title>
+  <title>识别 Debug 页面（WebSocket）</title>
   <style>
     body {
-      font-family: sans-serif;
-      text-align: center;
-      padding: 20px;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 30px;
       background: #f0f2f5;
     }
-    video, canvas {
-      border: 3px solid #007bff;
-      border-radius: 8px;
-      margin-top: 20px;
+    h2 {
+      color: #222;
+      margin-bottom: 20px;
+      text-align: center;
     }
-    #result {
+    video, canvas {
+      display: block;
+      margin: 0 auto;
+      border-radius: 8px;
+      border: 4px solid #007bff;
+      max-width: 100%;
+    }
+    .status-box {
+      max-width: 700px;
+      margin: 30px auto 0;
+      background: #fff;
+      padding: 20px 30px;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    }
+    .status-line {
+      margin: 15px 0;
+      font-size: 18px;
+    }
+    .label {
+      font-weight: bold;
+      color: #333;
+    }
+    .left {
+      color: #007bff;
+      font-weight: 600;
+    }
+    .right {
+      color: #28a745;
+      font-weight: 600;
+    }
+    .motion {
+      font-size: 16px;
+      color: #888;
+      margin-left: 10px;
+      font-style: italic;
+    }
+    .detected {
+      color: #ff8800;
+      font-weight: 600;
+    }
+    .success {
       margin-top: 20px;
+      color: #2ecc71;
       font-size: 20px;
       font-weight: bold;
+      text-align: center;
     }
   </style>
 </head>
 <body>
 
-<h2>📷 WebSocket 实时识别页面</h2>
+<h2>手势识别 Debug 页面（WebSocket）</h2>
 
-<!-- 摄像头画面 -->
+<!-- 摄像头视频画面 -->
 <video id="video" width="640" height="480" autoplay playsinline></video>
 <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
 
-<!-- 实时识别结果 -->
-<div id="result">识别结果：<span id="left">-</span> / <span id="right">-</span></div>
+<!-- 状态区域 -->
+<div class="status-box">
+  <div class="status-line">
+    <span class="label">左手识别：</span>
+    <span id="current-left" class="left">-</span>
+    <span id="motion-left" class="motion">-</span>
+  </div>
+  <div class="status-line">
+    <span class="label">右手识别：</span>
+    <span id="current-right" class="right">-</span>
+    <span id="motion-right" class="motion">-</span>
+  </div>
+  <div class="status-line">
+    <span class="label">识别历史：</span>
+    <span id="detected-list" class="detected">-</span>
+  </div>
+  <div id="completed" class="success"></div>
+</div>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("🚀 DOM 完成，准备调用 getUserMedia");
+  const level = "debug";
+  const qid = "debug";
 
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("❌ 当前浏览器不支持 getUserMedia");
-    return;
-  }
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const ws_protocol = location.protocol === "https:" ? "wss://" : "ws://";
+  const ws = new WebSocket(`${ws_protocol}${location.host}/ws/recognize/${level}/${qid}`);
+
+  let readyToSend = true;
+
+  ws.onopen = () => console.log("✅ WebSocket 已连接");
+
+  ws.onmessage = event => {
+    try {
+      const data = JSON.parse(event.data);
+      const status = data.status || {};
+      const motion = status.motion || {};
+
+      document.getElementById("current-left").textContent = status.current?.left || "-";
+      document.getElementById("motion-left").textContent = motion.left || "-";
+      document.getElementById("current-right").textContent = status.current?.right || "-";
+      document.getElementById("motion-right").textContent = motion.right || "-";
+      document.getElementById("detected-list").textContent = (status.detected || []).join(", ") || "-";
+      document.getElementById("completed").textContent = status.completed ? "✅ 识别完成！" : "";
+
+      readyToSend = true;
+    } catch (err) {
+      console.error("解析返回数据失败", err);
+    }
+  };
 
   navigator.mediaDevices.getUserMedia({ video: true })
     .then(stream => {
-      console.log("✅ 成功获取摄像头流");
-      const video = document.getElementById("video");
-      const canvas = document.getElementById("canvas");
-      const ctx = canvas.getContext("2d");
-
       video.srcObject = stream;
       video.play();
 
-      // ✅ 自动切换 ws:// 或 wss://
-      const ws_protocol = location.protocol === "https:" ? "wss://" : "ws://";
-      const ws = new WebSocket(ws_protocol + location.host + "/ws/recognize");
-
-      let readyToSend = true;
-
-      ws.onopen = () => console.log("🔗 WebSocket 已连接");
-
-      ws.onmessage = event => {
-        const data = JSON.parse(event.data);
-        document.getElementById("left").textContent = data.left || "-";
-        document.getElementById("right").textContent = data.right || "-";
-        readyToSend = true; // ✅ 只有收到返回才允许发送下一帧
-      };
-
       function sendFrame() {
-        if (
-          video.readyState >= 2 &&
-          ws.readyState === WebSocket.OPEN &&
-          readyToSend
-        ) {
+        if (video.readyState >= 2 && ws.readyState === WebSocket.OPEN && readyToSend) {
           readyToSend = false;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           canvas.toBlob(blob => {
             if (blob) {
               ws.send(blob);
             } else {
-              readyToSend = true; // 如果出错，释放锁
+              readyToSend = true;
             }
           }, "image/jpeg");
         }
-        requestAnimationFrame(sendFrame); // 用更灵活的刷新机制代替 setInterval
+        requestAnimationFrame(sendFrame);
       }
 
-      sendFrame(); // ⬅️ 开始发送循环
+      sendFrame();
     })
     .catch(err => {
-      alert(`❌ 无法访问摄像头：${err.name} - ${err.message}`);
-      console.error("🚫 getUserMedia 错误详情：", err);
+      alert(`无法访问摄像头：${err.name} - ${err.message}`);
+      console.error("摄像头访问失败", err);
     });
 });
 </script>
-
-
-
 
 </body>
 </html>

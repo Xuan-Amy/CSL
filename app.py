@@ -1,6 +1,6 @@
 from flask import Flask, render_template, redirect, request, jsonify
 from flask_sock import Sock
-import base64
+from camera_ws import SignRecognizerWS
 import json
 import os
 import joblib
@@ -20,7 +20,6 @@ encoder = joblib.load("models/label_encoder.joblib")
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2)
 
-# === 模型预热 ===
 def warmup_hands():
     dummy = np.zeros((480, 640, 3), dtype=np.uint8)
     _ = hands.process(cv2.cvtColor(dummy, cv2.COLOR_BGR2RGB))
@@ -43,7 +42,7 @@ def save_json(path, data):
 
 QUESTIONS = load_json(QUESTIONS_FILE)
 
-# === 路由 ===
+# === 页面路由 ===
 @app.route("/")
 def index():
     return render_template("index.html", questions=QUESTIONS)
@@ -155,48 +154,67 @@ def update_question(level, qid):
 def debug_ws():
     return render_template("debug_ws.html")
 
+# === WebSocket 通用识别 ===
 @sock.route("/ws/recognize")
-def recognize_ws(ws):
+def recognize_general(ws):
+    recognizer = SignRecognizerWS([])  # 无任务
+
     while True:
-        data = ws.receive()
-        if not data:
+        try:
+            data = ws.receive()
+            if not data:
+                break
+            np_arr = np.frombuffer(data, np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            result = recognizer.process_frame(frame)
+            ws.send(json.dumps(result))
+            time.sleep(0.01)
+        except Exception as e:
+            ws.send(json.dumps({"error": f"识别错误：{str(e)}"}))
             break
-        np_arr = np.frombuffer(data, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = hands.process(frame_rgb)
-        label_left, label_right = "-", "-"
 
-        if results.multi_hand_landmarks:
-            hand_map = {}
-            for i, h_info in enumerate(results.multi_handedness):
-                hand_label = h_info.classification[0].label
-                hand_map[hand_label] = results.multi_hand_landmarks[i]
+# === WebSocket 指定任务识别 ===
+@sock.route("/ws/recognize/<level>/<qid>")
+def recognize_task(ws, level, qid):
+    question = QUESTIONS.get(level, {}).get(qid)
+    if not question:
+        ws.send(json.dumps({"error": "题目不存在"}))
+        return
 
-            features = []
-            for label in ["Left", "Right"]:
-                if label in hand_map:
-                    lm = hand_map[label].landmark
-                    features.extend([coord for pt in lm for coord in (pt.x, pt.y, pt.z)])
-                else:
-                    features.extend([-1] * 63)
-            features.append(1 if len(hand_map) == 2 else 0)
+    recognizer = SignRecognizerWS(question.get("target_sequence", []))
 
-            features_scaled = scaler.transform([features])
-            pred = clf.predict(features_scaled)[0]
-            label_full = encoder.inverse_transform([pred])[0]
+    while True:
+        try:
+            data = ws.receive()
+            if not data:
+                break
+            np_arr = np.frombuffer(data, np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            result = recognizer.process_frame(frame)
+            ws.send(json.dumps(result))
+            time.sleep(0.01)
+        except Exception as e:
+            ws.send(json.dumps({"error": f"识别错误：{str(e)}"}))
+            break
 
-            if "Left" in hand_map:
-                label_left = label_full
-            if "Right" in hand_map:
-                label_right = label_full
+# === WebSocket Debug 专用路由（用于 /debug_ws） ===
+@sock.route("/ws/recognize/debug/debug")
+def recognize_debug(ws):
+    recognizer = SignRecognizerWS([])  # 空任务识别
 
-        ws.send(json.dumps({
-            "left": label_left,
-            "right": label_right
-        }))
-
-        time.sleep(0.01)
+    while True:
+        try:
+            data = ws.receive()
+            if not data:
+                break
+            np_arr = np.frombuffer(data, np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            result = recognizer.process_frame(frame)
+            ws.send(json.dumps(result))
+            time.sleep(0.01)
+        except Exception as e:
+            ws.send(json.dumps({"error": f"识别错误：{str(e)}"}))
+            break
 
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5000)
