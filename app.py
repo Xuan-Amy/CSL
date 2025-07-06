@@ -1,18 +1,12 @@
-from flask import Flask, render_template, redirect, request, jsonify
+from flask import Flask, render_template, redirect, request, jsonify, Response
 from flask_sock import Sock
 from camera_ws import SignRecognizerWS
-import json
-import os
-import joblib
-import numpy as np
-import cv2
-import mediapipe as mp
-import time
+import json, os, joblib, numpy as np, cv2, mediapipe as mp, time
 
 app = Flask(__name__)
 sock = Sock(app)
 
-# === 模型加载 ===
+# === 模型加载与 warmup ===
 clf = joblib.load("models/svm_model.joblib")
 scaler = joblib.load("models/scaler.joblib")
 encoder = joblib.load("models/label_encoder.joblib")
@@ -41,6 +35,9 @@ def save_json(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 QUESTIONS = load_json(QUESTIONS_FILE)
+
+# === 摄像头识别器实例池 ===
+camera_instances = {}
 
 # === 页面路由 ===
 @app.route("/")
@@ -150,26 +147,20 @@ def update_question(level, qid):
     save_json(QUESTIONS_FILE, QUESTIONS)
     return redirect("/admin/questions")
 
-
 @app.route("/debug_ws")
 def debug_ws():
     return render_template("debug_ws.html")
 
-
-# ========== WebSocket 公用函数 ==========
+# ========== WebSocket 核心逻辑 ==========
 def handle_ws(ws, recognizer):
     while True:
         try:
             data = ws.receive()
             if not data:
                 break
-
             np_arr = np.frombuffer(data, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
             result = recognizer.process_frame(frame)
-
-            # ✅ 不再处理 landmarks，直接发送
             ws.send(json.dumps(result))
             time.sleep(0.01)
         except Exception as e:
@@ -177,32 +168,55 @@ def handle_ws(ws, recognizer):
             ws.send(json.dumps({"error": f"识别错误：{str(e)}"}))
             break
 
-
-# ========== WebSocket 路由 ==========
-
-# 通用识别
+# ========== WebSocket 接口 ==========
 @sock.route("/ws/recognize")
 def recognize_general(ws):
-    recognizer = SignRecognizerWS([])  # 无任务序列
+    recognizer = SignRecognizerWS([])
     handle_ws(ws, recognizer)
 
-
-# 指定任务识别（level + qid）
 @sock.route("/ws/recognize/<level>/<qid>")
 def recognize_task(ws, level, qid):
+    key = f"{level}-{qid}"
     question = QUESTIONS.get(level, {}).get(qid)
     if not question:
         ws.send(json.dumps({"error": "题目不存在"}))
         return
     recognizer = SignRecognizerWS(question.get("target_sequence", []))
+    camera_instances[key] = recognizer
     handle_ws(ws, recognizer)
 
-
-# Debug 专用识别接口（debug_ws.html 专用）
 @sock.route("/ws/recognize/debug/debug")
 def recognize_debug(ws):
-    recognizer = SignRecognizerWS([])  # 空识别任务
+    recognizer = SignRecognizerWS([])
+    camera_instances["debug-debug"] = recognizer
     handle_ws(ws, recognizer)
-    
+
+# ========== 状态轮询接口 ==========
+@app.route("/status_feed/<level>/<qid>")
+def status_feed(level, qid):
+    key = f"{level}-{qid}"
+    if key in camera_instances:
+        status = camera_instances[key].get_status()
+        return jsonify({
+            "current": status.get("current", {}),
+            "detected": status.get("detected", []),
+            "completed": status.get("completed", False),
+            "motion": {
+                "left": camera_instances[key].motion.get_last_motion("left"),
+                "right": camera_instances[key].motion.get_last_motion("right"),
+            },
+            "landmarks": {
+                "left": camera_instances[key].last_landmarks.get("left", []),
+                "right": camera_instances[key].last_landmarks.get("right", []),
+            }
+        })
+    return jsonify({
+        "current": {}, "detected": [], "completed": False,
+        "motion": {"left": "-", "right": "-"},
+        "landmarks": {"left": [], "right": []}
+    })
+
+
+# ========== 启动 ==========
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5000)

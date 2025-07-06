@@ -33,15 +33,41 @@
       ]
     },
     "4": {
-      "prompt": "test",
+      "prompt": "学习：不好",
       "target_sequence": [
         {
-          "word": "A",
-          "motion": "right"
+          "word": "有 1",
+          "motion": "none"
         },
         {
-          "word": "B",
-          "motion": "up"
+          "word": "有 2",
+          "motion": "none"
+        }
+      ]
+    },
+    "5": {
+      "prompt": "不好",
+      "target_sequence": [
+        {
+          "word": "好",
+          "motion": "left"
+        },
+        {
+          "word": "好",
+          "motion": "right"
+        }
+      ]
+    },
+    "6": {
+      "prompt": "有",
+      "target_sequence": [
+        {
+          "word": "有 1",
+          "motion": "none"
+        },
+        {
+          "word": "有 2",
+          "motion": "none"
         }
       ]
     }

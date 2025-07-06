@@ -1,86 +1,280 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <title>任务 {{ level }}-{{ q }}</title>
-    <style>
-        .step { font-size: 20px; margin-right: 10px; }
-        .done { color: green; font-weight: bold; }
-        .arrow {
-            font-size: 14px;
-            vertical-align: super;
-            color: #666;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>任务 {{ level }}-{{ q }}</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: #f4f5f7;
+      padding: 30px;
+      text-align: center;
+      transition: background-color 1s ease;
+    }
+
+    h2 {
+      font-size: 26px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    canvas {
+      border-radius: 12px;
+      border: 4px solid #1976d2;
+      max-width: 100%;
+      height: auto;
+      aspect-ratio: 4 / 3;
+      background: black;
+    }
+
+    .step {
+      font-size: 20px;
+      margin-right: 10px;
+      transition: color 0.3s ease;
+    }
+
+    .done {
+      color: #43a047;
+      font-weight: bold;
+    }
+
+    .arrow {
+      font-size: 14px;
+      vertical-align: super;
+      color: #666;
+    }
+
+    .status-box {
+      display: inline-block;
+      background: #ffffff;
+      padding: 20px 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.07);
+      margin-top: 30px;
+      text-align: left;
+    }
+
+    .status-line {
+      margin: 12px 0;
+      font-size: 18px;
+    }
+
+    .label {
+      font-weight: 600;
+      color: #444;
+    }
+
+    .left {
+      color: #1976d2;
+      font-weight: 600;
+    }
+
+    .right {
+      color: #388e3c;
+      font-weight: 600;
+    }
+
+    .motion {
+      color: #999;
+      font-style: italic;
+      margin-left: 10px;
+    }
+
+    .success {
+      margin-top: 16px;
+      color: #2e7d32;
+      font-size: 22px;
+      font-weight: bold;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
-    <h2>任务 {{ level }}-{{ q }}</h2>
-    <p>{{ prompt }}</p>
 
-    <!-- 视频显示 -->
-    <img src="{{ url_for('video_feed', level=level, q=q) }}" width="640" height="480">
+<h2>🧩 手语任务 {{ level }}-{{ q }}</h2>
+<p>{{ prompt }}</p>
 
-    <!-- 动态状态展示 -->
-    <div style="margin-top: 20px;">
-        <h3>目标动作：</h3>
-        <div id="target-sequence"></div>
+<canvas id="canvas" width="640" height="480"></canvas>
 
-        <h3>识别状态：</h3>
-        <p>左手识别词语：<span id="current-left">-</span></p>
-        <p>右手识别词语：<span id="current-right">-</span></p>
-        <p id="completed" style="color: green; font-weight: bold;"></p>
-    </div>
+<div style="margin-top: 25px;">
+  <h3>目标动作：</h3>
+  <div id="target-sequence"></div>
+</div>
 
-    <script>
-    const targetSequence = {{ questions[level][q]["target_sequence"] | tojson }};
-    const level = "{{ level }}";
-    const q = "{{ q }}";
+<div class="status-box">
+  <div class="status-line">
+    <span class="label">左手识别：</span>
+    <span id="current-left" class="left">-</span>
+    <span id="motion-left" class="motion">-</span>
+  </div>
+  <div class="status-line">
+    <span class="label">右手识别：</span>
+    <span id="current-right" class="right">-</span>
+    <span id="motion-right" class="motion">-</span>
+  </div>
+  <div class="status-line">
+    <span class="label">识别进度：</span>
+    <span id="detected-list" class="left">-</span>
+  </div>
+  <div id="completed" class="success"></div>
+</div>
 
-    const targetDiv = document.getElementById("target-sequence");
-    const currentLeft = document.getElementById("current-left");
-    const currentRight = document.getElementById("current-right");
+<script>
+const level = "{{ level }}";
+const qid = "{{ q }}";
+const targetSequence = {{ questions[level][q]["target_sequence"] | tojson }};
 
-    function renderStatus(detectedList) {
-        targetDiv.innerHTML = "";
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-        for (let i = 0; i < targetSequence.length; i++) {
-            const item = targetSequence[i];
-            const word = item.word;
-            const motion = item.motion;
-            const isDetected = i < detectedList.length;
+const targetDiv = document.getElementById("target-sequence");
+const currentLeft = document.getElementById("current-left");
+const currentRight = document.getElementById("current-right");
 
-            const span = document.createElement("span");
-            span.classList.add("step");
-            if (isDetected) span.classList.add("done");
+function renderStatus(detectedList) {
+  targetDiv.innerHTML = "";
+  for (let i = 0; i < targetSequence.length; i++) {
+    const item = targetSequence[i];
+    const word = item.word;
+    const motion = item.motion;
+    const matched = i < detectedList.length && detectedList[i].word === word;
 
-            const arrowMap = {
-                "right": "→", "left": "←",
-                "up": "↑", "down": "↓",
-                "closer": "⤒", "farther": "⤓"
-            };
-            const arrow = motion && arrowMap[motion] ? arrowMap[motion] : "";
+    const span = document.createElement("span");
+    span.classList.add("step");
+    if (matched) span.classList.add("done");
 
-            span.innerHTML = `${word}${arrow ? '<sub class="arrow">' + arrow + '</sub>' : ''}`;
-            targetDiv.appendChild(span);
+    const arrowMap = {
+      "right": "→", "left": "←",
+      "up": "↑", "down": "↓",
+      "closer": "⤒", "farther": "⤓",
+      "none": "●"
+    };
+    const arrow = motion && arrowMap[motion] ? arrowMap[motion] : "";
+    span.innerHTML = `${word}${arrow ? '<sub class="arrow">' + arrow + '</sub>' : ''}`;
+    targetDiv.appendChild(span);
+  }
+}
+
+const ws_protocol = location.protocol === "https:" ? "wss://" : "ws://";
+const ws = new WebSocket(`${ws_protocol}${location.host}/ws/recognize/${level}/${qid}`);
+
+const CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [0, 9], [9,10], [10,11], [11,12],
+  [0,13], [13,14], [14,15], [15,16],
+  [0,17], [17,18], [18,19], [19,20]
+];
+
+let latestLandmarks = { left: [], right: [] };
+let readyToSend = true;
+let isCompleted = false;
+let hasLandmarks = false;
+
+let currentBrightness = 1.0;
+let targetBrightness = 1.0;
+
+ws.onopen = () => console.log("✅ WebSocket connected");
+
+ws.onmessage = event => {
+  try {
+    const data = JSON.parse(event.data);
+    const status = data.status || {};
+    const motion = status.motion || {};
+    const landmarks = data.landmarks || {};
+
+    currentLeft.textContent = status.current?.left || "-";
+    currentRight.textContent = status.current?.right || "-";
+    document.getElementById("motion-left").textContent = motion.left || "-";
+    document.getElementById("motion-right").textContent = motion.right || "-";
+
+    const detectedList = status.detected || [];
+    document.getElementById("detected-list").textContent = detectedList.map(x => x.word).join(", ") || "-";
+    renderStatus(detectedList);
+    document.getElementById("completed").textContent = status.completed ? "✅ 通关成功！" : "";
+
+    latestLandmarks = landmarks;
+    readyToSend = true;
+    isCompleted = !!status.completed;
+    hasLandmarks = (landmarks.left?.length > 0 || landmarks.right?.length > 0);
+
+    if (isCompleted) {
+      document.body.style.backgroundColor = "#c8e6c9";
+      targetBrightness = 1.0;
+    } else if (hasLandmarks) {
+      document.body.style.backgroundColor = "#1c1f26";
+      targetBrightness = 0.45;
+    } else {
+      document.body.style.backgroundColor = "#f4f5f7";
+      targetBrightness = 1.0;
+    }
+  } catch (err) {
+    console.error("解析失败", err);
+  }
+};
+
+navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+  const video = document.createElement("video");
+  video.srcObject = stream;
+  video.play();
+
+  video.onloadedmetadata = () => {
+    canvas.width = 640;
+    canvas.height = 480;
+  };
+
+  function sendFrameAndDraw() {
+    if (video.readyState >= 2) {
+      currentBrightness += (targetBrightness - currentBrightness) * 0.08;
+      ctx.filter = `brightness(${currentBrightness.toFixed(2)})`;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.filter = "none";
+
+      const drawLandmarks = (points, color) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        for (const [i, j] of CONNECTIONS) {
+          if (points[i] && points[j]) {
+            ctx.beginPath();
+            ctx.moveTo(points[i].x, points[i].y);
+            ctx.lineTo(points[j].x, points[j].y);
+            ctx.stroke();
+          }
         }
-    }
+        ctx.fillStyle = color;
+        for (const pt of points) {
+          if (pt && typeof pt.x === "number" && typeof pt.y === "number") {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 4, 0, 2 * Math.PI);
+            ctx.fill();
+          }
+        }
+      };
 
-    function updateStatus() {
-        fetch(`/status_feed/${level}/${q}`)
-            .then(res => res.json())
-            .then(data => {
-                const current = data.current || {};
-                currentLeft.innerText = current.left || "-";
-                currentRight.innerText = current.right || "-";
-                renderStatus(data.detected || []);
-                if (data.completed) {
-                    document.getElementById("completed").innerText = "✅ 通关成功！";
-                }
-            });
-    }
+      drawLandmarks(latestLandmarks.left || [], "#1976d2");
+      drawLandmarks(latestLandmarks.right || [], "#43a047");
 
-    setInterval(updateStatus, 800);
-    updateStatus();
-    </script>
+      if (ws.readyState === WebSocket.OPEN && readyToSend) {
+        readyToSend = false;
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        tempCanvas.toBlob(blob => {
+          if (blob) ws.send(blob);
+          else readyToSend = true;
+        }, "image/jpeg");
+      }
+    }
+    requestAnimationFrame(sendFrameAndDraw);
+  }
+
+  sendFrameAndDraw();
+}).catch(err => {
+  alert(`无法访问摄像头：${err.name} - ${err.message}`);
+  console.error("摄像头访问失败", err);
+});
+</script>
 </body>
 </html>

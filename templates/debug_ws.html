@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta charset="UTF-8">
   <title>识别 Debug 页面（显示视频背景+骨架）</title>
   <style>
@@ -13,6 +14,10 @@
     canvas {
       border-radius: 8px;
       border: 4px solid #007bff;
+      max-width: 100%;
+      height: auto;
+      aspect-ratio: 4 / 3;
+      background: black;
     }
     .status-box {
       display: inline-block;
