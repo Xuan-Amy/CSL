@@ -2,61 +2,35 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>识别 Debug 页面（WebSocket）</title>
+  <title>识别 Debug 页面（显示视频背景+骨架）</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
       padding: 30px;
       background: #f0f2f5;
-    }
-    h2 {
-      color: #222;
-      margin-bottom: 20px;
       text-align: center;
     }
-    video, canvas {
-      display: block;
-      margin: 0 auto;
+    canvas {
       border-radius: 8px;
       border: 4px solid #007bff;
-      max-width: 100%;
     }
     .status-box {
-      max-width: 700px;
-      margin: 30px auto 0;
+      display: inline-block;
       background: #fff;
       padding: 20px 30px;
       border-radius: 12px;
       box-shadow: 0 6px 20px rgba(0,0,0,0.1);
-    }
-    .status-line {
-      margin: 15px 0;
-      font-size: 18px;
-    }
-    .label {
-      font-weight: bold;
-      color: #333;
-    }
-    .left {
-      color: #007bff;
-      font-weight: 600;
-    }
-    .right {
-      color: #28a745;
-      font-weight: 600;
-    }
-    .motion {
-      font-size: 16px;
-      color: #888;
-      margin-left: 10px;
-      font-style: italic;
-    }
-    .detected {
-      color: #ff8800;
-      font-weight: 600;
-    }
-    .success {
       margin-top: 20px;
+      text-align: left;
+    }
+    .status-line { margin: 10px 0; font-size: 18px; }
+    .label { font-weight: bold; color: #333; }
+    .left  { color: #007bff; font-weight: 600; }
+    .right { color: #28a745; font-weight: 600; }
+    .motion { color: #888; font-style: italic; margin-left: 10px; }
+    .detected { color: #ff8800; font-weight: 600; }
+    .success {
+      margin-top: 10px;
       color: #2ecc71;
       font-size: 20px;
       font-weight: bold;
@@ -66,13 +40,11 @@
 </head>
 <body>
 
-<h2>手势识别 Debug 页面（WebSocket）</h2>
+<h2>🖐️ 手部骨架识别调试（含视频背景）</h2>
 
-<!-- 摄像头视频画面 -->
-<video id="video" width="640" height="480" autoplay playsinline></video>
-<canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
-
-<!-- 状态区域 -->
+<canvas id="canvas" width="640" height="480"></canvas>
+<br>
+</hr>
 <div class="status-box">
   <div class="status-line">
     <span class="label">左手识别：</span>
@@ -96,13 +68,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const level = "debug";
   const qid = "debug";
 
-  const video = document.getElementById("video");
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
 
   const ws_protocol = location.protocol === "https:" ? "wss://" : "ws://";
   const ws = new WebSocket(`${ws_protocol}${location.host}/ws/recognize/${level}/${qid}`);
 
+  const CONNECTIONS = [
+    [0, 1], [1, 2], [2, 3], [3, 4],
+    [0, 5], [5, 6], [6, 7], [7, 8],
+    [0, 9], [9,10], [10,11], [11,12],
+    [0,13], [13,14], [14,15], [15,16],
+    [0,17], [17,18], [18,19], [19,20]
+  ];
+
+  let latestLandmarks = { left: [], right: [] };
   let readyToSend = true;
 
   ws.onopen = () => console.log("✅ WebSocket 已连接");
@@ -112,6 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = JSON.parse(event.data);
       const status = data.status || {};
       const motion = status.motion || {};
+      const landmarks = data.landmarks || {};
 
       document.getElementById("current-left").textContent = status.current?.left || "-";
       document.getElementById("motion-left").textContent = motion.left || "-";
@@ -120,38 +101,74 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("detected-list").textContent = (status.detected || []).join(", ") || "-";
       document.getElementById("completed").textContent = status.completed ? "✅ 识别完成！" : "";
 
+      latestLandmarks = landmarks;
       readyToSend = true;
     } catch (err) {
       console.error("解析返回数据失败", err);
     }
   };
 
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
-      video.srcObject = stream;
-      video.play();
+  navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+    const video = document.createElement("video");
+    video.srcObject = stream;
+    video.play();
 
-      function sendFrame() {
-        if (video.readyState >= 2 && ws.readyState === WebSocket.OPEN && readyToSend) {
-          readyToSend = false;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob(blob => {
-            if (blob) {
-              ws.send(blob);
-            } else {
-              readyToSend = true;
+    video.onloadedmetadata = () => {
+      canvas.width = 640;
+      canvas.height = 480;
+    };
+
+    function sendFrameAndDraw() {
+      if (video.readyState >= 2) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const drawLandmarks = (points, color) => {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          for (const [i, j] of CONNECTIONS) {
+            if (points[i] && points[j]) {
+              ctx.beginPath();
+              ctx.moveTo(points[i].x, points[i].y);
+              ctx.lineTo(points[j].x, points[j].y);
+              ctx.stroke();
             }
+          }
+
+          ctx.fillStyle = color;
+          for (const pt of points) {
+            if (pt && typeof pt.x === "number" && typeof pt.y === "number") {
+              ctx.beginPath();
+              ctx.arc(pt.x, pt.y, 4, 0, 2 * Math.PI);
+              ctx.fill();
+            }
+          }
+        };
+
+        drawLandmarks(latestLandmarks.left || [], "#007bff");
+        drawLandmarks(latestLandmarks.right || [], "#28a745");
+
+        if (ws.readyState === WebSocket.OPEN && readyToSend) {
+          readyToSend = false;
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = canvas.height;
+          const tempCtx = tempCanvas.getContext("2d");
+          tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+          tempCanvas.toBlob(blob => {
+            if (blob) ws.send(blob);
+            else readyToSend = true;
           }, "image/jpeg");
         }
-        requestAnimationFrame(sendFrame);
       }
 
-      sendFrame();
-    })
-    .catch(err => {
-      alert(`无法访问摄像头：${err.name} - ${err.message}`);
-      console.error("摄像头访问失败", err);
-    });
+      requestAnimationFrame(sendFrameAndDraw);
+    }
+
+    sendFrameAndDraw();
+  }).catch(err => {
+    alert(`无法访问摄像头：${err.name} - ${err.message}`);
+    console.error("摄像头访问失败", err);
+  });
 });
 </script>
 

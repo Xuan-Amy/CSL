@@ -150,71 +150,59 @@ def update_question(level, qid):
     save_json(QUESTIONS_FILE, QUESTIONS)
     return redirect("/admin/questions")
 
+
 @app.route("/debug_ws")
 def debug_ws():
     return render_template("debug_ws.html")
 
-# === WebSocket 通用识别 ===
-@sock.route("/ws/recognize")
-def recognize_general(ws):
-    recognizer = SignRecognizerWS([])  # 无任务
 
+# ========== WebSocket 公用函数 ==========
+def handle_ws(ws, recognizer):
     while True:
         try:
             data = ws.receive()
             if not data:
                 break
+
             np_arr = np.frombuffer(data, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
             result = recognizer.process_frame(frame)
+
+            # ✅ 不再处理 landmarks，直接发送
             ws.send(json.dumps(result))
             time.sleep(0.01)
         except Exception as e:
+            print(f"[ERROR] WebSocket 识别异常：{e}")
             ws.send(json.dumps({"error": f"识别错误：{str(e)}"}))
             break
 
-# === WebSocket 指定任务识别 ===
+
+# ========== WebSocket 路由 ==========
+
+# 通用识别
+@sock.route("/ws/recognize")
+def recognize_general(ws):
+    recognizer = SignRecognizerWS([])  # 无任务序列
+    handle_ws(ws, recognizer)
+
+
+# 指定任务识别（level + qid）
 @sock.route("/ws/recognize/<level>/<qid>")
 def recognize_task(ws, level, qid):
     question = QUESTIONS.get(level, {}).get(qid)
     if not question:
         ws.send(json.dumps({"error": "题目不存在"}))
         return
-
     recognizer = SignRecognizerWS(question.get("target_sequence", []))
+    handle_ws(ws, recognizer)
 
-    while True:
-        try:
-            data = ws.receive()
-            if not data:
-                break
-            np_arr = np.frombuffer(data, np.uint8)
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            result = recognizer.process_frame(frame)
-            ws.send(json.dumps(result))
-            time.sleep(0.01)
-        except Exception as e:
-            ws.send(json.dumps({"error": f"识别错误：{str(e)}"}))
-            break
 
-# === WebSocket Debug 专用路由（用于 /debug_ws） ===
+# Debug 专用识别接口（debug_ws.html 专用）
 @sock.route("/ws/recognize/debug/debug")
 def recognize_debug(ws):
-    recognizer = SignRecognizerWS([])  # 空任务识别
-
-    while True:
-        try:
-            data = ws.receive()
-            if not data:
-                break
-            np_arr = np.frombuffer(data, np.uint8)
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            result = recognizer.process_frame(frame)
-            ws.send(json.dumps(result))
-            time.sleep(0.01)
-        except Exception as e:
-            ws.send(json.dumps({"error": f"识别错误：{str(e)}"}))
-            break
-
+    recognizer = SignRecognizerWS([])  # 空识别任务
+    handle_ws(ws, recognizer)
+    
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5000)
